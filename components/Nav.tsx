@@ -1,30 +1,38 @@
+import { useChatStore } from "@/stores/ChatStore";
+import { v4 as uuidv4 } from "uuid";
 import {
-  createStyles,
-  Navbar,
-  Group,
-  getStylesRef,
-  rem,
-  Tooltip,
   ActionIcon,
-  Text,
-  Modal,
-  useMantineColorScheme,
   Box,
-  MediaQuery,
   Burger,
+  Group,
+  MediaQuery,
+  Modal,
+  Navbar,
+  Text,
+  TextInput,
+  Tooltip,
+  createStyles,
+  getStylesRef,
+  px,
+  rem,
+  useMantineColorScheme,
 } from "@mantine/core";
 import { upperFirst, useDisclosure, useMediaQuery } from "@mantine/hooks";
 import {
-  IconPlus,
-  IconTrash,
-  IconSettings,
-  IconMoon,
-  IconSun,
+  IconArrowRight,
+  IconEdit,
   IconKey,
+  IconMoon,
+  IconPlus,
+  IconSettings,
+  IconSun,
+  IconTrash,
 } from "@tabler/icons-react";
-import { useChatStore } from "@/stores/ChatStore";
+import { useRef, useState } from "react";
+import ClearChatsButton from "./ClearChatsButton";
 import KeyModal from "./KeyModal";
 import SettingsModal from "./SettingsModal";
+import { useRouter } from "next/router";
 
 const useStyles = createStyles((theme) => ({
   header: {
@@ -118,22 +126,29 @@ const useStyles = createStyles((theme) => ({
 export default function NavbarSimple() {
   const { classes, cx, theme } = useStyles();
 
+  const router = useRouter();
+  const activeChatId = router.query.chatId as string | undefined;
+
   const [openedKeyModal, { open: openKeyModal, close: closeKeyModal }] =
     useDisclosure(false);
   const [
     openedSettingsModal,
     { open: openSettingsModal, close: closeSettingsModal },
   ] = useDisclosure(false);
+  const [openedTitleModal, { open: openTitleModal, close: closeTitleModal }] =
+    useDisclosure(false);
 
-  const addChat = useChatStore((state) => state.addChat);
+  const setActiveChatId = useChatStore((state) => state.setActiveChatId);
   const deleteChat = useChatStore((state) => state.deleteChat);
+  const clearChats = useChatStore((state) => state.clearChats);
 
   const chats = useChatStore((state) => state.chats);
-  const setActiveChat = useChatStore((state) => state.setActiveChat);
-  const activeChatId = useChatStore((state) => state.activeChatId);
+  const updateChat = useChatStore((state) => state.updateChat);
 
   const navOpened = useChatStore((state) => state.navOpened);
   const setNavOpened = useChatStore((state) => state.setNavOpened);
+
+  const [editedTitle, setEditedTitle] = useState("");
 
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const Icon = colorScheme === "dark" ? IconSun : IconMoon;
@@ -159,7 +174,7 @@ export default function NavbarSimple() {
         href="#"
         onClick={(event) => {
           event.preventDefault();
-          setActiveChat(chat.id);
+          router.push(`/chat/${chat.id}`);
           if (isSmall) {
             setNavOpened(false);
           }
@@ -171,41 +186,72 @@ export default function NavbarSimple() {
           </Text>
         </Box>
       </a>
-      <Tooltip label="Delete" withArrow position="right">
-        <a
-          href="#"
-          onClick={(event) => {
-            event.preventDefault();
-            deleteChat(chat.id);
-            // If there are no more chats, create one
-            if (chats.length === 1) {
-              addChat();
-            }
-          }}
-          style={{
-            position: "absolute",
-            right: -5,
-          }}
-        >
-          {chat.id === activeChatId && (
-            <ActionIcon
-              variant="default"
-              size={18}
-              sx={{
-                boxShadow: `8px 0 16px 20px ${
-                  theme.colorScheme === "dark" ? theme.colors.dark[7] : "white"
-                }`,
+      {chat.id === activeChatId && (
+        <>
+          <Tooltip label="Delete" withArrow position="right">
+            <a
+              href="#"
+              onClick={(event) => {
+                event.preventDefault();
+                deleteChat(chat.id);
+                router.push("/");
+              }}
+              style={{
+                position: "absolute",
+                right: -5,
               }}
             >
-              <IconTrash size="0.8rem" stroke={1.5} />
-            </ActionIcon>
-          )}
-        </a>
-      </Tooltip>
+              <ActionIcon
+                variant="default"
+                size={18}
+                sx={{
+                  boxShadow: `8px 0 16px 20px ${
+                    theme.colorScheme === "dark"
+                      ? theme.colors.dark[7]
+                      : "white"
+                  }`,
+                }}
+              >
+                <IconTrash size={px("0.8rem")} stroke={1.5} />
+              </ActionIcon>
+            </a>
+          </Tooltip>
+          <Tooltip label="Edit" withArrow position="right">
+            <a
+              href="#"
+              onClick={(event) => {
+                event.preventDefault();
+                openTitleModal();
+                if (isSmall) setNavOpened(false);
+                setEditedTitle(chat.title!);
+                setTimeout(() => {
+                  editTitleInputRef.current?.select();
+                }, 100);
+              }}
+              style={{
+                position: "absolute",
+                right: 15,
+              }}
+            >
+              <ActionIcon variant="default" size={18}>
+                <IconEdit size={px("0.8rem")} stroke={1.5} />
+              </ActionIcon>
+            </a>
+          </Tooltip>
+        </>
+      )}
     </Group>
   ));
 
   links.reverse();
+
+  const submitEditedTitle = () => {
+    if (editedTitle.trim()) {
+      updateChat({ id: activeChatId, title: editedTitle });
+    }
+    closeTitleModal();
+  };
+  const editTitleInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <Navbar
@@ -223,7 +269,7 @@ export default function NavbarSimple() {
             className={classes.link}
             onClick={(event) => {
               event.preventDefault();
-              addChat();
+              router.push("/");
             }}
           >
             <IconPlus className={classes.linkIcon} stroke={1.5} />
@@ -256,6 +302,16 @@ export default function NavbarSimple() {
         </Navbar.Section>
       </MediaQuery>
       <Navbar.Section className={classes.footer}>
+        {links?.length > 0 && (
+          <ClearChatsButton
+            classes={classes}
+            clearHandler={() => {
+              clearChats();
+              router.push("/");
+            }}
+          />
+        )}
+
         <a
           href="#"
           className={classes.link}
@@ -267,7 +323,7 @@ export default function NavbarSimple() {
           </span>
         </a>
 
-        <Modal opened={openedKeyModal} onClose={closeKeyModal} title="API Key">
+        <Modal opened={openedKeyModal} onClose={closeKeyModal} title="API Keys">
           <KeyModal close={closeKeyModal} />
         </Modal>
 
@@ -282,7 +338,7 @@ export default function NavbarSimple() {
           }}
         >
           <IconKey className={classes.linkIcon} stroke={1.5} />
-          <span>API Key</span>
+          <span>API Keys</span>
         </a>
 
         <Modal
@@ -308,6 +364,28 @@ export default function NavbarSimple() {
           <span>Settings</span>
         </a>
       </Navbar.Section>
+      <Modal
+        opened={openedTitleModal}
+        onClose={closeTitleModal}
+        title="Set Chat Title"
+      >
+        <TextInput
+          ref={editTitleInputRef}
+          type="text"
+          value={editedTitle}
+          onChange={(e) => setEditedTitle(e.target.value)}
+          rightSection={
+            <ActionIcon onClick={() => submitEditedTitle()}>
+              <IconArrowRight size={px("1.2rem")} stroke={1.5} />
+            </ActionIcon>
+          }
+          onKeyPress={(event) => {
+            if (event.key === "Enter") {
+              submitEditedTitle();
+            }
+          }}
+        />
+      </Modal>
     </Navbar>
   );
 }

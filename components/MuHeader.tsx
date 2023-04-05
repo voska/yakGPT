@@ -9,10 +9,14 @@ import {
   Text,
   MediaQuery,
   Divider,
+  px,
 } from "@mantine/core";
+import { v4 as uuidv4 } from "uuid";
 import { useMediaQuery } from "@mantine/hooks";
 import { IconPlus } from "@tabler/icons-react";
 import { useChatStore } from "@/stores/ChatStore";
+import { getModelInfo, modelInfos } from "@/stores/Model";
+import { useRouter } from "next/router";
 
 const useStyles = createStyles((theme) => ({
   inner: {
@@ -84,10 +88,11 @@ const useStyles = createStyles((theme) => ({
   },
 }));
 
-export default function HeaderMiddle({ children }: any) {
-  const { classes, cx, theme } = useStyles();
+export default function MuHeader({ children }: any) {
+  const { classes, theme } = useStyles();
   const chats = useChatStore((state) => state.chats);
-  const activeChatId = useChatStore((state) => state.activeChatId);
+  const router = useRouter();
+  const activeChatId = router.query.chatId as string | undefined;
 
   const activeChat = chats.find((chat) => chat.id === activeChatId);
 
@@ -98,15 +103,9 @@ export default function HeaderMiddle({ children }: any) {
 
   const addChat = useChatStore((state) => state.addChat);
 
-  const pushToTalkMode = useChatStore((state) => state.pushToTalkMode);
-  const setPushToTalkMode = useChatStore((state) => state.setPushToTalkMode);
-
   const isSmall = useMediaQuery(`(max-width: ${theme.breakpoints.sm})`);
-
-  const modelDisplayNames = {
-    "gpt-3.5-turbo": "ChatGPT-3.5",
-    "gpt-4": "GPT-4",
-  };
+  const isKnownModel = modelInfos[activeModel] !== undefined;
+  const modelInfo = getModelInfo(activeModel);
 
   return (
     <Header height={36} mb={120} sx={{ zIndex: 1002 }}>
@@ -134,15 +133,15 @@ export default function HeaderMiddle({ children }: any) {
                 </MediaQuery>
               </>
             ) : null}
-            <Text size="sm">
-              {modelDisplayNames[
-                activeModel as keyof typeof modelDisplayNames
-              ] || activeModel}
-            </Text>
-            <Divider size="xs" orientation="vertical" />
-            <Text size="sm">
-              ${(((activeChat?.tokensUsed || 0) / 1000) * 0.002).toFixed(2)}
-            </Text>
+            <Text size="sm">{modelInfo.displayName}</Text>
+            {isKnownModel && (
+              <>
+                <Divider size="xs" orientation="vertical" />
+                <Text size="sm">
+                  ${(activeChat?.costIncurred || 0).toFixed(2)}
+                </Text>
+              </>
+            )}
           </Group>
         </MediaQuery>
 
@@ -150,7 +149,7 @@ export default function HeaderMiddle({ children }: any) {
           <MediaQuery largerThan="sm" styles={{ display: "none", width: 0 }}>
             <ActionIcon
               onClick={() => {
-                addChat();
+                addChat(router);
                 if (isSmall) {
                   setNavOpened(false);
                 }
@@ -158,7 +157,7 @@ export default function HeaderMiddle({ children }: any) {
               size="lg"
             >
               <IconPlus
-                size="1.5rem"
+                size={px("1.5rem")}
                 stroke={1.5}
                 color={theme.colors.gray[6]}
               />
